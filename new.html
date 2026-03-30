@@ -68,9 +68,14 @@ a.smallLink{color:#9fd3ff}
       <select id="audioOutput" style="max-width:250px"><option value="">Permita o acesso primeiro...</option></select>
       <label class="small">Baud</label>
       <select id="baud">
+        <option value="25">25 bps</option>
+        <option value="75">75 bps</option>
+        <option value="150">150 bps</option>
         <option value="300">300 bps</option>
         <option value="1200" selected>1200 bps</option>
         <option value="2400">2400 bps</option>
+        <option value="9200">9200 bps</option>
+        <option value="12900">12900 bps</option>
       </select>
       <button onclick="abrirAudio()" id="btnLigar" disabled>Ligar Modem</button>
       <button onclick="fecharAudio()" id="btnDesligar" disabled>Desligar Modem</button>
