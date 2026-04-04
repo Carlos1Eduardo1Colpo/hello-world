@@ -1,13 +1,64 @@
-+<!DOCTYPE html>+
- +<html>
- +<head>
- + <meta http-equiv="Content-Type" content=" text/html; charset=utf-8" />
- + <title>my-first-website</title>
- + <LINK href="styles.css" rel="stylesheet" type="text/css">
- +</head>+
- +<body>+
- +<img src="https://octodex.github.com/images/daftpunktocat-thomas.gif" id="octocat" alt=" octocat-gif" />+
- +<!-- Change this code here by copy and pastin g your template on line 15 -->+<p>Welcome to your first GitHub Pages website!</p>+
- +<img src="https://raw.githubusercontent.com/Carlos1Eduardo1Colpo/hello-world/master/200w.gif" id="octocat" alt="200w-gif" />+
-+</body>
-+</html>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Menu Automático</title>
+
+<style>
+body {
+  font-family: Arial;
+  text-align: center;
+}
+
+.botao {
+  display: block;
+  margin: 10px auto;
+  padding: 12px;
+  width: 250px;
+  background-color: #28a745;
+  color: white;
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.botao:hover {
+  background-color: #1e7e34;
+}
+</style>
+
+</head>
+
+<body>
+
+<h1>Arquivos do Repositório</h1>
+
+<div id="menu"></div>
+
+<script>
+const usuario = "Carlos1Eduardo1Colpo";
+const repo = "hello-world";
+
+fetch(`https://api.github.com/repos/${usuario}/${repo}/contents/`)
+  .then(response => response.json())
+  .then(data => {
+    const menu = document.getElementById("menu");
+
+    data.forEach(item => {
+      if(item.name.endsWith(".html")) {
+
+        const botao = document.createElement("a");
+        botao.href = item.name;
+        botao.innerText = item.name;
+        botao.className = "botao";
+
+        menu.appendChild(botao);
+      }
+    });
+  })
+  .catch(error => {
+    console.error("Erro:", error);
+  });
+</script>
+
+</body>
+</html>
