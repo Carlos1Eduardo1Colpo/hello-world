@@ -88,12 +88,14 @@ a.smallLink{color:#9fd3ff}
     <div class="row">
       <label class="small">Versão</label>
       <select id="versao"><option>9.0</option><option>9.1</option><option>10.0</option><option selected>10.1</option></select>
+      <span id="versaoDetectada" class="small" style="color:#9aa">detectado: aguardando tráfego</span>
 
       <label class="small">Placa</label>
       <select id="placa"><option value="810">810</option><option value="820">820</option><option value="821">821</option><option value="tipo5">Tipo5</option><option value="tipo6">Tipo6</option></select>
 
-      <label class="small">Origem</label><input id="origem" type="number" value="100" style="width:80px">
+      <label class="small">Origem</label><input id="origem" type="number" value="111" style="width:80px">
       <label class="small">Destino</label><input id="destino" type="number" value="1" style="width:80px">
+      <label class="small">Central (id)</label><input id="centralId" type="number" value="111" style="width:80px" onchange="onCentralIdChange()" title="Endereço da central na sua rede — usado pra classificar o mapa">
 
       <label class="small">Comando</label>
       <select id="comando"></select>
@@ -107,6 +109,7 @@ a.smallLink{color:#9fd3ff}
   <div class="section">
     <h2>Mapa Topológico (visual)</h2>
     <div id="mapa" aria-hidden="false"></div>
+    <div style="margin-top:4px" class="small">Clique num nó/repetidora pra alternar o papel — qualquer ponto pode repetir outro.</div>
     <canvas id="mapCanvas" width="900" height="360"></canvas>
     <div style="margin-top:8px" class="small">Canvas usado para exportar mapa no PDF/XLSX/CSV.</div>
   </div>
@@ -205,38 +208,91 @@ const PLACAS = {
 };
 
 const COMANDOS = {
-  0x32: { nome: "Leitura Estados" },
-  0x33: { nome: "Leitura Eventos" },
-  0x34: { nome: "Leitura Setpoints" },
-  0x35: { nome: "Leitura Timers" },
-  0x36: { nome: "Leitura Relogio" },
-  0x37: { nome: "Leitura Auxiliares" },
-  0x41: { nome: "Escrita Referencia", tipo: "percentual" },
-  0x42: { nome: "Setpoint Controle", tipo: "setpoints" },
-  0x43: { nome: "Setpoint Bloqueio", tipo: "setpoints" },
-  0x44: { nome: "Manual", tipo: "controles" },
-  0x45: { nome: "Automatico", tipo: "controles" },
-  0x46: { nome: "Acionamento", tipo: "controles" },
-  0x47: { nome: "Desligamento", tipo: "controles" },
-  0x4D: { nome: "Ligar", tipo: "controles" },
-  0x49: { nome: "Escrita Relogio", tipo: "relogio" },
-  0x54: { nome: "Escrita Selecao Variavel", tipo: "percentual" },
-  0x60: { nome: "Comando 60h", tipo: "percentual" },
-  0x62: { nome: "Comando 62h", tipo: "percentual" },
-  0x63: { nome: "Comando 63h", tipo: "percentual" },
-  0x64: { nome: "Comando 64h", tipo: "percentual" },
-  0x67: { nome: "Comando 67h", tipo: "percentual" },
-  0x68: { nome: "Comando 68h", tipo: "percentual" },
-  0x80: { nome: "Config 80h", tipo: "percentual" },
-  0x82: { nome: "Config 82h", tipo: "percentual" },
-  0x83: { nome: "Config 83h", tipo: "percentual" },
-  0x86: { nome: "Config 86h", tipo: "percentual" },
-  0x87: { nome: "Config 87h", tipo: "percentual" }
+  // Leitura
+  0x31: { nome: "Leitura de Reservatório" },
+  0x32: { nome: "Leitura de Operação" },
+  0x33: { nome: "Leitura de Setpoints de Controle" },
+  0x34: { nome: "Leitura de Integrações (v9.0)" },
+  0x35: { nome: "Leitura de Timers de Controle", tipo: "controles" },
+  0x36: { nome: "Leitura de Horário de Ponta (v9.0)" },
+  0x37: { nome: "Leitura de Setpoints de Alarme Analógico (v9.0)" },
+  0x3D: { nome: "Leitura de Seleção de Variável de Controle (v10.0+)" },
+  0x3E: { nome: "Leitura de Setpoints de Bloqueio (v10.0+)" },
+  0x51: { nome: "Leitura de Dados de Atuadores (v10.1)" },
+  0x55: { nome: "Leitura de Relógio" },
+  0x78: { nome: "Leitura de Bóias (v9.0)" },
+  0x83: { nome: "Leitura de Config. Geral Botoeira (v9.0)" },
+
+  // Escrita
+  0x39: { nome: "Escrita de Referências + Leitura Monitoramento (v9.1+)", tipo: "percentual" },
+  0x41: { nome: "Escrita de Referências de Controle (v9.1+) / Escrita de Nível (v9.0)", tipo: "percentual" },
+  0x42: { nome: "Escrita de Setpoints de Controle", tipo: "setpoints" },
+  0x43: { nome: "Acionamento de Controle", tipo: "controles" },
+  0x44: { nome: "Desligamento de Controle", tipo: "controles" },
+  0x45: { nome: "Passa Controle para Manual", tipo: "controles" },
+  0x46: { nome: "Passa Controle para Automático", tipo: "controles" },
+  0x47: { nome: "Reconhecimento de Falha (v9.0)", tipo: "controles" },
+  0x48: { nome: "Abre Válvula (v9.0)", tipo: "controles" },
+  0x49: { nome: "Fecha Válvula (v9.0)", tipo: "controles" },
+  0x4A: { nome: "Escrita de Timers de Controle" },
+  0x4B: { nome: "Escrita de Horário de Ponta (v9.0)" },
+  0x4C: { nome: "Escrita de Setpoints de Alarme Analógico (v9.0)" },
+  0x4D: { nome: "Escrita de Seleção de Variável de Controle (v10.0+)" },
+  0x4E: { nome: "Escrita Relógio (v9.1) / Escrita Setpoints Bloqueio (v10.0+)", tipo: "setpoints" },
+  0x52: { nome: "Escrita de Dados de Atuadores (v10.1)" },
+  0x54: { nome: "Escrita de Relógio (v9.0 / v10.1)", tipo: "relogio" },
+  0x57: { nome: "Zeramento de Vazões (v10.1)", tipo: "controles" },
+
+  // Configuração legada v9.0 (faixas 6xH/7xH/8xH — eliminadas a partir da v9.1)
+  0x60: { nome: "Config 60h (v9.0)", tipo: "percentual" },
+  0x62: { nome: "Config 62h (v9.0)", tipo: "percentual" },
+  0x63: { nome: "Config 63h (v9.0)", tipo: "percentual" },
+  0x64: { nome: "Config 64h (v9.0)", tipo: "percentual" },
+  0x67: { nome: "Config 67h (v9.0)", tipo: "percentual" },
+  0x68: { nome: "Config 68h (v9.0)", tipo: "percentual" },
+  0x80: { nome: "Config 80h (v9.0)", tipo: "percentual" },
+  0x82: { nome: "Config 82h (v9.0)", tipo: "percentual" },
+  0x86: { nome: "Config 86h (v9.0)", tipo: "percentual" },
+  0x87: { nome: "Config 87h (v9.0)", tipo: "percentual" }
 };
+
+// Mapeamento placa -> TIPO do protocolo, usado nas tabelas de resposta multibyte abaixo.
+// PALPITE: tratando 810/820/821 como TIPO 2 (linha recalque, v9.1+) — tipo5/tipo6 são diretos.
+// Se algum desses for outro TIPO na prática, me fala qual que eu ajusto rápido.
+const PLACA_TO_TIPO = {
+  "810": "tipo2", "820": "tipo2", "821": "tipo2",
+  "tipo5": "tipo5", "tipo6": "tipo6"
+};
+function getTipoAtual() {
+  if (document.getElementById("versao").value === "9.0") return "v9_0";
+  const placaSel = document.getElementById("placa").value;
+  return PLACA_TO_TIPO[placaSel] || "tipo2";
+}
 
 const FREQ_MARK = 1200;
 const FREQ_SPACE = 2200;
 const PTT_TONE = 200;
+
+// Assinaturas de comando por versão (tabela de compatibilidade completa em
+// references/version-diff.md). Só entram aqui comandos que EXCLUEM alguma versão —
+// comandos comuns a todas não discriminam nada.
+// 0x4E: existe em 9.1 (Relógio) e 10.0/10.1 (Bloqueio), mas NÃO em 9.0 — então enxergar
+// 0x4E ainda descarta 9.0, mesmo sem dar pra saber qual dos outros três é.
+const CMD_VERSION_SIGNATURE = {
+  0x34: ["9.0"], 0x36: ["9.0"], 0x37: ["9.0"], 0x47: ["9.0"], 0x48: ["9.0"],
+  0x49: ["9.0"], 0x4B: ["9.0"], 0x4C: ["9.0"], 0x78: ["9.0"], 0x83: ["9.0"],
+  0x39: ["9.1", "10.0", "10.1"], 0x4E: ["9.1", "10.0", "10.1"],
+  0x3D: ["10.0", "10.1"], 0x3E: ["10.0", "10.1"], 0x4D: ["10.0", "10.1"],
+  0x51: ["10.1"], 0x52: ["10.1"], 0x57: ["10.1"]
+};
+// Faixas inteiras eliminadas a partir da v9.1 (configuração de botoeira/recalque/reservatório legada)
+function isFaixaExclusivaV9_0(cmdByte) {
+  return (cmdByte >= 0x60 && cmdByte <= 0x69) ||
+         (cmdByte >= 0x70 && cmdByte <= 0x78) ||
+         (cmdByte >= 0x80 && cmdByte <= 0x87);
+}
+let versionCandidates = new Set(["9.0", "9.1", "10.0", "10.1"]);
+let detectedVersion = null;
 
 /* Preenche select de comandos */
 const comandoSelect = document.getElementById("comando");
@@ -341,22 +397,159 @@ function atualizarCampos() {
 /* ----------------------
    Parser / Decodificação
    ---------------------- */
+function frameChecksumValid(bytes) {
+  const etxIndex = bytes.indexOf(0x03);
+  if (etxIndex < 3) return false;
+  const checksum = bytes[etxIndex + 1] || 0;
+  const sum = bytes.slice(0, etxIndex + 1).reduce((a, b) => a + b, 0) & 0xFF;
+  return sum === checksum;
+}
+
+function updateVersionDetection(cmdByte) {
+  const sig = isFaixaExclusivaV9_0(cmdByte) ? ["9.0"] : CMD_VERSION_SIGNATURE[cmdByte];
+  if (!sig) return; // comando comum a todas as versões (ou não catalogado) — não discrimina
+
+  const next = new Set([...versionCandidates].filter(v => sig.includes(v)));
+  if (next.size === 0) {
+    logEng("Aviso: comando 0x" + cmdByte.toString(16) + " incompatível com a versão já detectada — rede mista ou frame corrompido?");
+    return; // sinal contraditório: mantém os candidatos anteriores em vez de zerar tudo
+  }
+  versionCandidates = next;
+
+  const badge = document.getElementById("versaoDetectada");
+  if (versionCandidates.size === 1) {
+    const v = [...versionCandidates][0];
+    if (v !== detectedVersion) {
+      detectedVersion = v;
+      const sel = document.getElementById("versao");
+      if (sel) sel.value = v;
+      logEng("Versão do protocolo detectada: " + v);
+    }
+    if (badge) badge.innerText = "detectado: " + v;
+  } else if (badge) {
+    badge.innerText = "detectado: possível " + [...versionCandidates].join("/");
+  }
+}
+
+function decodeBase200(rawBytes) {
+  // rawBytes: 1, 2 ou 3 bytes crus do protocolo (0x30-0xFF), MSB primeiro
+  const vals = rawBytes.map(b => b - 0x30);
+  if (vals.length === 1) return vals[0];
+  if (vals.length === 2) return vals[0] * 200 + vals[1];
+  if (vals.length === 3) return vals[0] * 200 * 200 + vals[1] * 200 + vals[2];
+  return null;
+}
+
+function decodeBase207Percent(rawByte) {
+  // v9.0: dado_tx = 2*percentual + 0x30  =>  percentual = (byte-0x30)/2
+  return (rawByte - 0x30) / 2;
+}
+
+// Layout de campos das respostas (references/response-maps.md). "b" = quantos bytes esse
+// campo ocupa (1/2/3, base 200). Comandos cujo layout não muda por TIPO usam um array direto;
+// os que mudam (31H/32H/33H/35H/3DH/3EH) usam um objeto {tipo2:[...], tipo5:[...], ...}.
+// Comandos sem entrada aqui (ex: 39H, 51H) caem no decode genérico byte-a-byte de sempre —
+// não documentei o layout exato deles com confiança suficiente pra inventar campos.
+const RESPONSE_MAPS = {
+  0x31: {
+    tipo1: [{ b: 2, label: "Nível" }, { b: 1, label: "Eventos" }],
+    v9_0: [{ b: 1, label: "Nível" }, { b: 1, label: "Status instalação" }]
+  },
+  0x32: {
+    tipo6: [
+      { b: 1, label: "Entradas digitais 5-8" }, { b: 1, label: "Entradas digitais 1-4" },
+      { b: 2, label: "Analógica 1" }, { b: 2, label: "Analógica 2" },
+      { b: 2, label: "Analógica 3" }, { b: 2, label: "Analógica 4" },
+      { b: 1, label: "Estado do controle" }, { b: 2, label: "Eventos" }
+    ],
+    tipo2: [
+      { b: 1, label: "Entradas digitais 5-8" }, { b: 1, label: "Entradas digitais 1-4" },
+      { b: 1, label: "Saídas digitais 1-3" },
+      { b: 2, label: "Analógica 1" }, { b: 2, label: "Analógica 2" },
+      { b: 2, label: "Analógica 3" }, { b: 2, label: "Analógica 4" },
+      { b: 2, label: "Eventos" },
+      { b: 1, label: "Estado controle 1" }, { b: 1, label: "Estado controle 2" }, { b: 1, label: "Estado controle 3" }
+    ],
+    tipo5: [
+      { b: 1, label: "Entradas digitais 13-16" }, { b: 1, label: "Entradas digitais 7-12" }, { b: 1, label: "Entradas digitais 1-6" },
+      { b: 1, label: "Saídas digitais 1-6" }, { b: 1, label: "Saídas digitais 7-12" },
+      ...Array.from({ length: 16 }, (_, i) => ({ b: 2, label: "Analógica " + (i + 1) })),
+      { b: 2, label: "Eventos" },
+      ...Array.from({ length: 8 }, (_, i) => ({ b: 1, label: "Estado controle " + (i + 1) })),
+      ...Array.from({ length: 8 }, (_, i) => ({ b: 2, label: "Tempo operação controle " + (i + 1) })),
+      { b: 1, label: "Dados atuador 1 (v10.1)" }, { b: 1, label: "Dados atuador 2 (v10.1)" },
+      { b: 1, label: "Dados atuador 3 (v10.1)" }, { b: 1, label: "Dados atuador 4 (v10.1)" }
+    ],
+    v9_0: [
+      { b: 1, label: "Corrente bomba 1" }, { b: 1, label: "Corrente bomba 2" },
+      { b: 1, label: "Corrente bomba 3" }, { b: 1, label: "Corrente bomba 4" },
+      { b: 1, label: "Tensão" }, { b: 1, label: "Vazão" },
+      { b: 1, label: "Pressão sucção" }, { b: 1, label: "Pressão recalque" },
+      ...Array.from({ length: 8 }, (_, i) => ({ b: 1, label: "Canal " + (i + 9) })),
+      { b: 1, label: "Status instalação 1" }, { b: 1, label: "Status instalação 2" },
+      { b: 1, label: "Status bomba 1" }, { b: 1, label: "Status bomba 2" },
+      { b: 1, label: "Status bomba 3" }, { b: 1, label: "Status bomba 4" },
+      { b: 1, label: "Status válvulas 1-2" }, { b: 1, label: "Status válvulas 3-4" },
+      { b: 1, label: "Saída DA 1" }, { b: 1, label: "Saída DA 2" }, { b: 1, label: "Saída DA 3" }, { b: 1, label: "Saída DA 4" }
+    ]
+  },
+  0x33: {
+    tipo6: [{ b: 2, label: "Setpoint alto" }, { b: 2, label: "Setpoint baixo" }],
+    tipo2: Array.from({ length: 3 }, (_, i) => [{ b: 2, label: "SP alto ctrl " + (i + 1) }, { b: 2, label: "SP baixo ctrl " + (i + 1) }]).flat(),
+    tipo5: Array.from({ length: 8 }, (_, i) => [{ b: 2, label: "SP alto ctrl " + (i + 1) }, { b: 2, label: "SP baixo ctrl " + (i + 1) }]).flat()
+  },
+  0x35: {
+    tipo5: Array.from({ length: 6 }, (_, i) => [
+      { b: 1, label: `Faixa ${i + 1} hora início` }, { b: 1, label: `Faixa ${i + 1} min início` },
+      { b: 1, label: `Faixa ${i + 1} hora fim` }, { b: 1, label: `Faixa ${i + 1} min fim` }
+    ]).flat()
+  },
+  0x3D: {
+    tipo6: [{ b: 2, label: "Seleção do controle" }],
+    tipo2: Array.from({ length: 3 }, (_, i) => ({ b: 2, label: "Seleção ctrl " + (i + 1) })),
+    tipo5: Array.from({ length: 8 }, (_, i) => [{ b: 2, label: "Seleção ctrl " + (i + 1) }, { b: 2, label: "Seleção bloqueio " + (i + 1) }]).flat()
+  },
+  0x3E: {
+    tipo5: Array.from({ length: 8 }, (_, i) => [{ b: 2, label: "SP alto bloqueio " + (i + 1) }, { b: 2, label: "SP baixo bloqueio " + (i + 1) }]).flat()
+  },
+  0x55: [
+    { b: 1, label: "Ano" }, { b: 1, label: "Mês" }, { b: 1, label: "Dia do mês" },
+    { b: 1, label: "Dia da semana" }, { b: 1, label: "Hora" }, { b: 1, label: "Minuto" }, { b: 1, label: "Segundo" }
+  ]
+};
+
 function decodeDataValues(dataBytes, version, cmd) {
-  const out = [];
   const info = COMANDOS[cmd];
+
+  const mapEntry = RESPONSE_MAPS[cmd];
+  const fieldList = mapEntry && (Array.isArray(mapEntry) ? mapEntry : mapEntry[getTipoAtual()]);
+  if (fieldList) {
+    const out = [];
+    let i = 0;
+    for (const field of fieldList) {
+      if (i >= dataBytes.length) break;
+      const chunk = dataBytes.slice(i, i + field.b);
+      if (chunk.length < field.b) break; // resposta mais curta que o mapa documentado — para aqui
+      const valor = (version === "9.0" && field.b === 1) ? decodeBase207Percent(chunk[0]) : decodeBase200(chunk);
+      out.push({ raw: chunk, decoded: valor, hex: chunk.map(b => "0x" + ("0" + b.toString(16)).slice(-2)).join(" "), label: field.label, text: field.label + ": " + valor });
+      i += field.b;
+    }
+    for (; i < dataBytes.length; i++) { // sobra além do mapa — mostra crua, sem inventar rótulo
+      out.push({ raw: dataBytes[i], decoded: decodeOffsetByte(dataBytes[i]), hex: "0x" + ("0" + dataBytes[i].toString(16)).slice(-2), label: null, text: String(decodeOffsetByte(dataBytes[i])) });
+    }
+    return out;
+  }
+
+  // Sem mapa documentado pra esse comando/tipo (ex: 39H, 51H) — decode genérico byte a byte
+  const out = [];
   const offsetMode = info && (info.tipo === "percentual" || info.tipo === "controles" || info.tipo === "setpoints");
   const rawMode = info && info.tipo === "relogio";
-
   for (const b of dataBytes) {
-    if (rawMode) {
+    if (rawMode || !offsetMode) {
       out.push({ raw: b, decoded: b, hex: "0x" + ("0" + b.toString(16)).slice(-2), text: String(b) });
-      continue;
-    }
-    if (offsetMode) {
+    } else {
       const dec = decodeOffsetByte(b);
       out.push({ raw: b, decoded: dec, hex: "0x" + ("0" + b.toString(16)).slice(-2), text: String(dec) });
-    } else {
-      out.push({ raw: b, decoded: b, hex: "0x" + ("0" + b.toString(16)).slice(-2), text: String(b) });
     }
   }
   return out;
@@ -364,7 +557,9 @@ function decodeDataValues(dataBytes, version, cmd) {
 
 function parseFrame(bytes, version) {
   if (!bytes || bytes.length < 5) return null;
-  if (bytes[0] !== 0x02) return null;
+  const startByte = bytes[0];
+  if (startByte !== 0x02 && startByte !== 0x01) return null; // 0x02=STX comando | 0x01=SOH resposta
+  const isResposta = startByte === 0x01;
 
   const etxIndex = bytes.indexOf(0x03);
   if (etxIndex < 3) return null;
@@ -376,14 +571,21 @@ function parseFrame(bytes, version) {
   const checksum = bytes[etxIndex + 1] || 0;
   const sum = bytes.slice(0, etxIndex + 1).reduce((a, b) => a + b, 0) & 0xFF;
   const valid = (sum === checksum);
-  const cmdName = COMANDOS[cmd] ? COMANDOS[cmd].nome : ("0x" + cmd.toString(16));
+  let cmdName;
+  if (isResposta) {
+    cmdName = cmd === 0x06 ? "ACK" : (cmd === 0x15 ? "NACK" : ("RESP 0x" + cmd.toString(16)));
+  } else {
+    cmdName = COMANDOS[cmd] ? COMANDOS[cmd].nome : ("0x" + cmd.toString(16));
+  }
   const dest = decodeOffsetByte(destRaw);
   const orig = decodeOffsetByte(origRaw);
-  const decoded = decodeDataValues(data, version || document.getElementById("versao").value, cmd);
+  const versaoResolvida = version || detectedVersion || document.getElementById("versao").value;
+  const decoded = decodeDataValues(data, versaoResolvida, cmd);
 
   return {
-    version: version || document.getElementById("versao").value,
-    stx: 0x02,
+    version: versaoResolvida,
+    stx: startByte,
+    isResposta,
     destRaw,
     origRaw,
     dest,
@@ -772,8 +974,13 @@ async function enviar() {
   };
 
   historico.push(registro);
-  const key = `${dest}|${cmd}|${orig}`;
+  const key = `${dest}|${orig}`;
   pendingResponses[key] = { ts: registro.ts, registro };
+
+  // Classifica também no envio: sem isso, central/repetidora só entravam no mapa
+  // quando uma resposta chegava (e nunca a partir do próprio comando enviado)
+  if (Number.isFinite(orig)) autoClassifyNode(orig);
+  if (Number.isFinite(dest)) autoClassifyNode(dest);
 
   try {
     txBusy = true;
@@ -837,19 +1044,24 @@ function processarRxBuffer() {
 
   while (processed) {
     processed = false;
-    const stxIndex = rxBuffer.indexOf(0x02);
-    if (stxIndex < 0) {
+
+    // Aceita STX (0x02, comando) OU SOH (0x01, resposta de estação) como início de quadro
+    let startIndex = -1;
+    for (let i = 0; i < rxBuffer.length; i++) {
+      if (rxBuffer[i] === 0x02 || rxBuffer[i] === 0x01) { startIndex = i; break; }
+    }
+    if (startIndex < 0) {
       rxBuffer = [];
       break;
     }
 
-    if (rxBuffer.length <= stxIndex + 4) break;
+    if (rxBuffer.length <= startIndex + 4) break;
 
-    const etxIndex = rxBuffer.indexOf(0x03, stxIndex + 4);
+    const etxIndex = rxBuffer.indexOf(0x03, startIndex + 4);
     if (etxIndex < 0) break;
     if (rxBuffer.length <= etxIndex + 1) break;
 
-    const fullFrame = rxBuffer.slice(stxIndex, etxIndex + 2);
+    const fullFrame = rxBuffer.slice(startIndex, etxIndex + 2);
     rxBuffer = rxBuffer.slice(etxIndex + 2);
     processed = true;
     handleReceivedFrame(fullFrame);
@@ -861,6 +1073,12 @@ function handleReceivedFrame(frameBytes) {
   stats.bytesRx += frameBytes.length;
   updateStatsUI();
 
+  // Detecta versão pelo CMD antes de decodificar os DADOS — só em comando (STX) válido,
+  // já que em resposta (SOH) esse byte é ACK/NACK, não código de comando.
+  if (frameBytes[0] === 0x02 && frameBytes.length > 3 && frameChecksumValid(frameBytes)) {
+    updateVersionDetection(frameBytes[3]);
+  }
+
   const parsed = parseFrame(frameBytes);
   if (!parsed) {
     logEng("Frame RX inválido: " + Array.from(frameBytes).map(b => b.toString(16)).join(" "));
@@ -869,6 +1087,9 @@ function handleReceivedFrame(frameBytes) {
 
   parsed.receivedAt = Date.now();
   logEng(`RX ${parsed.cmdName} ori:${parsed.orig} dst:${parsed.dest} valid:${parsed.valid}`);
+  logLeigo(parsed.isResposta
+    ? `Resposta recebida da estação ${parsed.orig}: ${parsed.cmdName}`
+    : `Comando recebido de ${parsed.orig} p/ estação ${parsed.dest}`);
 
   historico.push({
     data: new Date().toLocaleString(),
@@ -877,13 +1098,13 @@ function handleReceivedFrame(frameBytes) {
     origem: parsed.orig,
     destino: parsed.dest,
     comando: parsed.cmdName,
-    dados: parsed.decodedValues.map(d => d.decoded + " (" + d.hex + ")").join("; "),
+    dados: parsed.decodedValues.map(d => (d.label ? d.label + ": " : "") + d.decoded + " (" + d.hex + ")").join("; "),
     frame: frameBytes.map(b => ("0" + b.toString(16)).slice(-2)).join(" "),
     rx: true,
     ts: Date.now()
   });
 
-  const replyKey = `${parsed.orig}|${parsed.cmd}|${parsed.dest}`;
+  const replyKey = `${parsed.orig}|${parsed.dest}`;
   if (pendingResponses[replyKey]) {
     const sent = pendingResponses[replyKey];
     const latency = Date.now() - sent.ts;
@@ -893,24 +1114,63 @@ function handleReceivedFrame(frameBytes) {
     delete pendingResponses[replyKey];
   }
 
+  updateCentralByFrequency(parsed);
   autoClassifyNode(parsed.orig);
 }
 
 /* ----------------------
    Auto classificação
    ---------------------- */
+function getCentralId() {
+  const el = document.getElementById("centralId");
+  const v = el ? parseInt(el.value, 10) : NaN;
+  return Number.isFinite(v) ? v : 1;
+}
+
+function reclassifyCentral(id) {
+  const ri = rede.repetidoras.indexOf(id);
+  if (ri >= 0) rede.repetidoras.splice(ri, 1);
+  const ni = rede.nos.indexOf(id);
+  if (ni >= 0) rede.nos.splice(ni, 1);
+  rede.central = id;
+  desenhar();
+}
+
+function onCentralIdChange() {
+  const id = getCentralId();
+  reclassifyCentral(id);
+  logEng("Central redefinida manualmente: " + id);
+}
+
+let addressFreq = {}; // { endereco: quantas vezes apareceu como orig ou dest em frame válido }
+
+function updateCentralByFrequency(parsed) {
+  // Endereço só conta em frame com checksum ok — frame corrompido não deve pesar na contagem.
+  if (!parsed.valid) return;
+  addressFreq[parsed.orig] = (addressFreq[parsed.orig] || 0) + 1;
+  addressFreq[parsed.dest] = (addressFreq[parsed.dest] || 0) + 1;
+
+  let bestId = null, bestCount = 0;
+  for (const idStr in addressFreq) {
+    if (addressFreq[idStr] > bestCount) { bestCount = addressFreq[idStr]; bestId = parseInt(idStr, 10); }
+  }
+  if (bestId !== null && bestId !== getCentralId()) {
+    const el = document.getElementById("centralId");
+    if (el) el.value = bestId;
+    reclassifyCentral(bestId);
+    logEng("Central detectada automaticamente (endereço mais frequente na comunicação, " + bestCount + "x): " + bestId);
+  }
+}
+
 function autoClassifyNode(id) {
-  if (id === 1) {
+  if (id === getCentralId()) {
     if (rede.central !== id) {
       rede.central = id;
       logEng("Central detectada: " + id);
     }
-  } else if (id > 50 && id < 80) {
-    if (!rede.repetidoras.includes(id)) {
-      rede.repetidoras.push(id);
-      logEng("Repetidora detectada: " + id);
-    }
-  } else {
+  } else if (!rede.repetidoras.includes(id)) {
+    // Qualquer ponto pode repetir outro — não dá pra inferir isso pelo endereço.
+    // Entra como nó por padrão; vira repetidora só por marcação manual (clique no mapa ou CSV).
     if (!rede.nos.includes(id)) {
       rede.nos.push(id);
       logEng("Nó detectado: " + id);
@@ -919,14 +1179,28 @@ function autoClassifyNode(id) {
   desenhar();
 }
 
+function toggleRepetidora(id) {
+  const ri = rede.repetidoras.indexOf(id);
+  if (ri >= 0) {
+    rede.repetidoras.splice(ri, 1);
+    if (!rede.nos.includes(id)) rede.nos.push(id);
+    logEng("Marcação manual: " + id + " voltou a nó");
+  } else {
+    const ni = rede.nos.indexOf(id);
+    if (ni >= 0) rede.nos.splice(ni, 1);
+    rede.repetidoras.push(id);
+    logEng("Marcação manual: " + id + " agora é repetidora");
+  }
+  desenhar();
+}
+
 function detectNodesFromTraffic() {
+  const centralId = getCentralId();
   historico.forEach(h => {
     if (h.rx) autoClassifyNode(h.origem);
     else if (h.destino) {
-      if (h.destino === 1) rede.central = 1;
-      else if (h.destino > 50 && h.destino < 80) {
-        if (!rede.repetidoras.includes(h.destino)) rede.repetidoras.push(h.destino);
-      } else if (!rede.nos.includes(h.destino)) {
+      if (h.destino === centralId) rede.central = centralId;
+      else if (!rede.repetidoras.includes(h.destino) && !rede.nos.includes(h.destino)) {
         rede.nos.push(h.destino);
       }
     }
@@ -945,6 +1219,12 @@ function criarNodeDiv(id, tipo, x, y) {
   d.style.left = x + "px";
   d.style.top = y + "px";
   d.innerText = `${tipo.toUpperCase()} ${id}`;
+  if (tipo === "repetidora" || tipo === "no") {
+    d.style.pointerEvents = "auto";
+    d.style.cursor = "pointer";
+    d.title = "Clique pra alternar nó/repetidora";
+    d.onclick = () => toggleRepetidora(id);
+  }
   mapa.appendChild(d);
 }
 
